@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>Study Challenge Online</title>
+<style>
+body { 
+    font-family: Arial, sans-serif; 
+    direction: rtl; 
+    padding: 20px; 
+    background: #e6f7ff; 
+}
+button, input { padding: 8px; margin: 5px 0; border-radius: 5px; }
+button { background: #4da6ff; color: #fff; border: none; cursor: pointer; }
+button:hover { background: #3399ff; }
+.subject, .chapter { background: #fff; padding: 10px; margin: 10px 0; border-radius: 8px; border-left: 5px solid #4da6ff; }
+.chapter { border-bottom: 1px dashed #b3d9ff; }
+.done { color: green; text-decoration: line-through; }
+.player-section { border: 1px solid #b3d9ff; padding: 10px; margin: 10px 0; border-radius: 8px; }
+#startChallengeBtn { background-color: #ff9933; }
+#startChallengeBtn:hover { background-color: #e68a00; }
+#backBtn { background-color: #666; margin-bottom: 10px; }
+#backBtn:hover { background-color: #444; }
+</style>
+</head>
+<body>
+
+<h2>🎮 تحدي الدراسة الأونلاين</h2>
+
+<!-- زر رجوع للصفحة الأصلية -->
+<button id="backBtn" onclick="window.location.href='stady_planner.html'">⬅️ رجوع للمخطط الدراسي</button>
+
+<!-- إنشاء أو الانضمام لغرفة -->
+<button id="createRoomBtn">إنشاء غرفة جديدة</button>
+<input type="text" id="joinRoomInput" placeholder="رمز الغرفة">
+<button id="joinRoomBtn">الانضمام لغرفة</button>
+
+<div id="gameArea" style="display:none;">
+    <h3>⏱ الوقت المتبقي: <span id="timer">00:00</span></h3>
+    <div class="player-section" id="player1Section"><h4>أنت</h4></div>
+    <div class="player-section" id="player2Section"><h4>صديقك</h4></div>
+    <button id="startChallengeBtn" style="display:none;">بدء التحدي</button>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+import { getDatabase, ref, set, push, onValue, update } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js";
+
+// Firebase config
+const firebaseConfig = {
+    apiKey: "AIzaSyAnbP6YF_iG62uD2NX_vhWPFwVTWUP6c1Y",
+    authDomain: "stady-planner.firebaseapp.com",
+    databaseURL: "https://stady-planner-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "stady-planner",
+    storageBucket: "stady-planner.firebasestorage.app",
+    messagingSenderId: "272130168806",
+    appId: "1:272130168806:web:596f31184640161e212827",
+    measurementId: "G-BBK1EEQMWX"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+let roomId = null;
+let playerId = null;
+let playerName = null;
+let gameData = null;
+let timerInterval = null;
+
+// عناصر الصفحة
+const gameArea = document.getElementById("gameArea");
+const player1Section = document.getElementById("player1Section");
+const player2Section = document.getElementById("player2Section");
+const timerEl = document.getElementById("timer");
+const startChallengeBtn = document.getElementById("startChallengeBtn");
+
+// إنشاء غرفة جديدة
+document.getElementById("createRoomBtn").onclick = async () => {
+    playerName = prompt("ادخل اسمك:");
+    if(!playerName) return;
+    const roomRef = push(ref(db, 'rooms'));
+    roomId = roomRef.key;
+    playerId = "player1";
+    await set(roomRef, { 
+        players: { player1: { name: playerName, subjects: [], ready: false } },
+        started: false,
+        duration: 300 // مدة التحدي بالثواني (5 دقائق)
+    });
+    alert(`تم إنشاء الغرفة! شارك هذا الرقم مع صديقك: ${roomId}`);
+    setupGame();
+};
+
+// الانضمام لغرفة موجودة
+document.getElementById("joinRoomBtn").onclick = async () => {
+    playerName = prompt("ادخل اسمك:");
+    if(!playerName) return;
+    const joinId = document.getElementById("joinRoomInput").value.trim();
+    if(!joinId) return alert("ادخل رمز الغرفة");
+    roomId = joinId;
+    playerId = "player2";
+    await set(ref(db, `rooms/${roomId}/players/player2`), { name: playerName, subjects: [], ready: false });
+    setupGame();
+};
+
+// إعداد اللعبة
+function setupGame() {
+    gameArea.style.display = "block";
+    if(playerId === "player1") startChallengeBtn.style.display = "block";
+
+    onValue(ref(db, `rooms/${roomId}`), snapshot => {
+        gameData = snapshot.val();
+        renderPlayers();
+        if(gameData.started && !timerInterval) startTimer(gameData.duration);
+    });
+}
+
+// إضافة المواد والشابترات لكل لاعب
+function addSubjects(playerKey) {
+    const subjects = [];
+    let addMore = true;
+    while(addMore){
+        const name = prompt("اسم المادة (اضغط إلغاء لإنهاء):");
+        if(!name) break;
+        const chaptersCount = parseInt(prompt(`كم عدد الشابترات في ${name}?`));
+        const chapters = [];
+        for(let i=0;i<chaptersCount;i++){
+            const chName = prompt(`اسم الشابتر ${i+1} في ${name}:`);
+            if(chName) chapters.push({name: chName, done:false});
+        }
+        subjects.push({name, chapters});
+        addMore = confirm("هل تريد إضافة مادة أخرى؟");
+    }
+    update(ref(db, `rooms/${roomId}/players/${playerKey}`), { subjects, ready:true });
+}
+
+// عرض المواد لكل لاعب
+function renderPlayers() {
+    if(gameData.players.player1){
+        player1Section.innerHTML = `<h4>${gameData.players.player1.name}</h4>`;
+        if(gameData.players.player1.subjects) gameData.players.player1.subjects.forEach(s => {
+            player1Section.innerHTML += `<div class="subject">${s.name}</div>`;
+        });
+    }
+    if(gameData.players.player2){
+        player2Section.innerHTML = `<h4>${gameData.players.player2.name}</h4>`;
+        if(gameData.players.player2.subjects) gameData.players.player2.subjects.forEach(s => {
+            player2Section.innerHTML += `<div class="subject">${s.name}</div>`;
+        });
+    }
+}
+
+// بدء التحدي
+startChallengeBtn.onclick = () => {
+    addSubjects("player1");
+    update(ref(db, `rooms/${roomId}`), { started: true });
+    startTimer(gameData.duration);
+};
+
+// عداد الوقت
+function startTimer(duration) {
+    let time = duration;
+    timerInterval = setInterval(() => {
+        const min = String(Math.floor(time/60)).padStart(2,'0');
+        const sec = String(time%60).padStart(2,'0');
+        timerEl.textContent = `${min}:${sec}`;
+        if(time <= 0){
+            clearInterval(timerInterval);
+            alert("انتهى الوقت!");
+        }
+        time--;
+    },1000);
+}
+</script>
+
+</body>
+</html>

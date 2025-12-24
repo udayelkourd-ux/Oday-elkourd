@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>Study Planner - تصميم طبي</title>
+<style>
+body { 
+    font-family: Arial, sans-serif; 
+    direction: rtl; 
+    padding: 20px; 
+    background: #e6f7ff; 
+}
+input, button { padding: 8px; margin: 5px 0; border-radius: 5px; border: 1px solid #b3d9ff; }
+button { background-color: #4da6ff; color: white; border: none; cursor: pointer; }
+button:hover { background-color: #3399ff; }
+.subject { background: #ffffff; padding: 10px; margin: 10px 0; border-radius: 8px; border-left: 5px solid #4da6ff; box-shadow: 2px 2px 6px rgba(0,0,0,0.1);}
+.chapter { margin-right: 20px; padding: 4px; border-bottom: 1px dashed #b3d9ff; }
+.done { color: green; text-decoration: line-through; }
+.reminder { font-size: 14px; color: #555; }
+#onlineBtn { background-color: #ff9933; margin-bottom: 10px; }
+#onlineBtn:hover { background-color: #e68a00; }
+</style>
+</head>
+<body>
+
+<h2>📚 مخطط الدراسة</h2>
+<button id="onlineBtn" onclick="window.location.href='online.html'">🎮 العب أونلاين</button>
+
+<input type="text" id="subjectInput" placeholder="اسم المادة">
+<button id="addBtn">إضافة مادة</button>
+
+<div id="subjects"></div>
+
+<hr>
+<h3>⏰ مواعيد المراجعة</h3>
+<ul id="reminders"></ul>
+
+<button id="resetBtn">🔄 إعادة من جديد</button>
+
+<script>
+let data = JSON.parse(localStorage.getItem("studyData")) || [];
+let remindersData = JSON.parse(localStorage.getItem("reminders")) || [];
+
+const subjectInput = document.getElementById("subjectInput");
+const subjectsDiv = document.getElementById("subjects");
+const remindersUl = document.getElementById("reminders");
+
+document.getElementById("addBtn").onclick = () => {
+    const name = subjectInput.value.trim();
+    if (!name) return alert("ادخل اسم المادة أولاً");
+    data.push({ name: name, chapters: [] });
+    subjectInput.value = "";
+    save();
+    render();
+};
+
+function addChapter(sIndex) {
+    const ch = prompt("اسم الشابتر:");
+    if (!ch) return;
+    data[sIndex].chapters.push({ name: ch, done: false, finishedAt: null });
+    save();
+    render();
+}
+
+function finishChapter(sIndex, cIndex) {
+    const now = new Date();
+    const chapter = data[sIndex].chapters[cIndex];
+    chapter.done = true;
+    chapter.finishedAt = now.toLocaleString();
+    createReminders(chapter.name, now);
+    save();
+    render();
+}
+
+function createReminders(name, base) {
+    const times = [];
+    const sameDay = new Date(base); sameDay.setHours(21,0,0);
+    const nextDay = new Date(base); nextDay.setDate(nextDay.getDate()+1); nextDay.setHours(5,0,0);
+    const after3 = new Date(base); after3.setDate(after3.getDate()+3); after3.setHours(9,0,0);
+    const after7 = new Date(base); after7.setDate(after7.getDate()+7); after7.setHours(9,0,0);
+    times.push(sameDay,nextDay,after3,after7);
+    times.forEach(t => remindersData.push({ text: name, time: t.toLocaleString() }));
+}
+
+function save() {
+    localStorage.setItem("studyData", JSON.stringify(data));
+    localStorage.setItem("reminders", JSON.stringify(remindersData));
+}
+
+document.getElementById("resetBtn").onclick = () => {
+    if (confirm("هل تريد حذف كل شيء؟")) {
+        localStorage.clear();
+        location.reload();
+    }
+}
+
+function render() {
+    subjectsDiv.innerHTML = "";
+    data.forEach((s,i) => {
+        const div = document.createElement("div");
+        div.className = "subject";
+        div.innerHTML = `<b>${s.name}</b> <button onclick="addChapter(${i})">+ Chapter</button>`;
+        s.chapters.forEach((c,j) => {
+            div.innerHTML += `<div class="chapter ${c.done?'done':''}">
+                ${c.name} ${c.finishedAt?'✔ '+c.finishedAt:''}
+                ${!c.done?`<button onclick="finishChapter(${i},${j})">✔</button>`:''}
+            </div>`;
+        });
+        subjectsDiv.appendChild(div);
+    });
+
+    remindersUl.innerHTML = "";
+    remindersData.forEach(r => {
+        const li = document.createElement("li");
+        li.className = "reminder";
+        li.textContent = `${r.text} — ${r.time}`;
+        remindersUl.appendChild(li);
+    });
+}
+
+render();
+</script>
+
+</body>
+</html>
